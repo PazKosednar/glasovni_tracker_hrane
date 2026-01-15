@@ -16,5 +16,65 @@
         "beljakovine": 1.3,
         "ogljikovi_hidrati": 27,
         "maščobe": 0.4
+    },
+    "piščančje_prsi": {
+        "kcal": 165,
+        "beljakovine": 31,
+        "ogljikovi_hidrati": 0,
+        "maščobe": 3.6
+    },
+    "riž": {
+        "kcal": 130,
+        "beljakovine": 2.7,
+        "ogljikovi_hidrati": 28,
+        "maščobe": 0.3
+    },
+    "testenine": {
+        "kcal": 131,
+        "beljakovine": 5,
+        "ogljikovi_hidrati": 25,
+        "maščobe": 1.1
+    },
+    "sir_gauda": {
+        "kcal": 356,
+        "beljakovine": 25,
+        "ogljikovi_hidrati": 2.2,
+        "maščobe": 27
+    },
+    "jogurt_grški": {
+        "kcal": 59,
+        "beljakovine": 10,
+        "ogljikovi_hidrati": 3.6,
+        "maščobe": 0.4
+    },
+    "arašidovo_maslo": {
+        "kcal": 588,
+        "beljakovine": 25,
+        "ogljikovi_hidrati": 20,
+        "maščobe": 50
+    },
+    "jabolko": {
+        "kcal": 52,
+        "beljakovine": 0.3,
+        "ogljikovi_hidrati": 14,
+        "maščobe": 0.2
+    },
+    "losos": {
+        "kcal": 208,
+        "beljakovine": 20,
+        "ogljikovi_hidrati": 0,
+        "maščobe": 13
+    },
+    "krompir": {
+        "kcal": 87,
+        "beljakovine": 2,
+        "ogljikovi_hidrati": 20,
+        "maščobe": 0.1
+    },
+    "ovseni_kosmiči": {
+        "kcal": 389,
+        "beljakovine": 17,
+        "ogljikovi_hidrati": 66,
+        "maščobe": 7
     }
 }
