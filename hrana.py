@@ -7,24 +7,36 @@ ZIVILA_PATH = Path(__file__).parent / "zivila.json"
 seznam_kolicin = {"enkrat": 1, "dvakrat": 2,
                   "trikrat": 3, "štirikrat": 4, "petkrat": 5, "ena": 1, "dva": 2, "tri": 3, "štiri": 4, "pet": 5}
 
+dan = {
+    "kcal": 0,
+    "beljakovine": 0,
+    "ogljikovi_hidrati": 0,
+    "maščobe": 0
+}
+
 
 def main():
     seznam_zivil = nalozi_zivila()
     seznam_zivil = {k.strip().lower(): v for k, v in seznam_zivil.items()}
 
     while True:
+        print("==========================================================")
         print("== Povej hrano katero želiš vnesti(npr. dvakrat banana) ==")
-        input("⏎ ENTER za začetek beleženja...")
+        print("== 'Pregled' Pregled kalorij == 'Izhod' Izhod programa  ==")
+        input("============= ⏎ ENTER za začetek beleženja ===============")
 
         spoken_text = poslusaj()
 
         if spoken_text is None:
             print("Nič ni bilo prepoznano")
-            print("=" * 35)
             continue
 
         if "izhod" in spoken_text.lower():
             print(f"Adijo! Se vidimo!")
+            break
+
+        if "pregled" in spoken_text.lower():
+            izpis_dneva()
             break
 
         razdeli = spoken_text.split()
@@ -44,6 +56,8 @@ def main():
             print("=" * 35)
             print(f"{hrana.capitalize()} dodan/a v jedilnik.")
             izpis_makro(zivilo, faktor)
+            dan.update()
+            shrani_makro(zivilo, faktor)
             print("=" * 35)
 
         else:
@@ -74,6 +88,23 @@ def izpis_makro(zivilo, faktor):
     print(
         f"{zivilo['ogljikovi_hidrati'] * faktor} ogljikovih hidratov")
     print(f"{zivilo['maščobe'] * faktor} maščob")
+
+
+def shrani_makro(zivilo, faktor):
+    dan["kcal"] += zivilo["kcal"] * faktor
+    dan["beljakovine"] += zivilo["beljakovine"] * faktor
+    dan["ogljikovi_hidrati"] += zivilo["ogljikovi_hidrati"] * faktor
+    dan["maščobe"] += zivilo["maščobe"] * faktor
+
+
+def izpis_dneva():
+    print("=" * 35)
+    print("Današnji vnos:")
+    print(f"{dan['kcal']} kalorij")
+    print(f"{dan['beljakovine']} beljakovin")
+    print(f"{dan['ogljikovi_hidrati']} ogljikovih hidratov")
+    print(f"{dan['maščobe']} maščob")
+    print("=" * 35)
 
 
 def nalozi_zivila(path: Path = ZIVILA_PATH) -> dict:

@@ -5,13 +5,43 @@
         "ogljikovi_hidrati": 11.4,
         "maščobe": 1.0
     },
+    "toasta": {
+        "kcal": 61,
+        "beljakovine": 2.3,
+        "ogljikovi_hidrati": 11.4,
+        "maščobe": 1.0
+    },
     "jajca": {
         "kcal": 77,
         "beljakovine": 6.3,
         "ogljikovi_hidrati": 0.6,
         "maščobe": 5.3
     },
+    "jajce": {
+        "kcal": 77,
+        "beljakovine": 6.3,
+        "ogljikovi_hidrati": 0.6,
+        "maščobe": 5.3
+    },
+    "jajc": {
+        "kcal": 77,
+        "beljakovine": 6.3,
+        "ogljikovi_hidrati": 0.6,
+        "maščobe": 5.3
+    },
     "banana": {
+        "kcal": 105,
+        "beljakovine": 1.3,
+        "ogljikovi_hidrati": 27,
+        "maščobe": 0.4
+    },
+    "banan": {
+        "kcal": 105,
+        "beljakovine": 1.3,
+        "ogljikovi_hidrati": 27,
+        "maščobe": 0.4
+    },
+    "banane": {
         "kcal": 105,
         "beljakovine": 1.3,
         "ogljikovi_hidrati": 27,
