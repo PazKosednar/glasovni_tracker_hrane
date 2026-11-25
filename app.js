@@ -28,18 +28,42 @@ const store = {
   },
 };
 
+// Razmerja makrohranil (% energije: beljakovine / ogljikovi hidrati / maščobe).
+// To so pogoste splošne razdelitve, ne medicinsko priporočilo.
+const RATIOS = [
+  { id: 'uravnotezeno', name: 'Uravnoteženo', p: 30, c: 40, f: 30 },
+  { id: 'beljakovinsko', name: 'Visoko beljakovinsko', p: 40, c: 30, f: 30 },
+  { id: 'nizkooh', name: 'Nizko OH', p: 35, c: 20, f: 45 },
+  { id: 'sportno', name: 'Športno (več OH)', p: 25, c: 55, f: 20 },
+];
+
+/** Iz kcal in razmerja izračuna grame (1 g B/OH = 4 kcal, 1 g M = 9 kcal). */
+function goalFromRatio(kcal, ratioId) {
+  const r = RATIOS.find((x) => x.id === ratioId) || RATIOS[0];
+  return {
+    kcal,
+    p: Math.round((kcal * r.p) / 100 / 4),
+    c: Math.round((kcal * r.c) / 100 / 4),
+    f: Math.round((kcal * r.f) / 100 / 9),
+  };
+}
+
 const DEFAULT_SETTINGS = {
-  goal: { kcal: 2200, p: 140, c: 250, f: 70 },
+  goal: goalFromRatio(2200, 'uravnotezeno'),
+  ratio: 'uravnotezeno',
+  goalWeight: 0,         // ciljna teža v kg (0 = ni nastavljena)
   breakfastEnd: '10:30', // do te ure = zajtrk
   lunchEnd: '16:30',     // do te ure = kosilo, potem večerja
   apiKey: '',
 };
 let settings = { ...DEFAULT_SETTINGS, ...store.get('settings', {}) };
-settings.goal = { ...DEFAULT_SETTINGS.goal, ...settings.goal };
+// makri se vedno izračunajo iz kcal + razmerja
+settings.goal = goalFromRatio(Number(settings.goal && settings.goal.kcal) || 2200, settings.ratio);
 
 let log = store.get('log', {});          // { 'YYYY-MM-DD': [entry, ...] }
 let myFoods = store.get('foods', {});    // { key: food }
 let recent = store.get('recent', []);    // [food, ...] zadnjih 30
+let weights = store.get('weights', {});  // { 'YYYY-MM-DD': kg }
 
 const state = { date: todayKey() };
 
@@ -112,6 +136,7 @@ function render() {
   ring.style.strokeDasharray = C;
   ring.style.strokeDashoffset = C * (1 - ratio);
   ring.classList.toggle('over', left < 0);
+  ring.style.opacity = tot.kcal > 0 ? 1 : 0; // brez pike pri 0 kcal
   $('#kcalLeft').textContent = r0(Math.abs(left));
   $('#kcalLeftLabel').textContent = left >= 0 ? 'kcal ostane' : 'kcal preko';
   $('#kcalEaten').textContent = r0(tot.kcal) + ' kcal';
@@ -127,6 +152,8 @@ function render() {
     macro('Beljakovine', tot.p, settings.goal.p, 'var(--protein)') +
     macro('Ogljikovi hidrati', tot.c, settings.goal.c, 'var(--carbs)') +
     macro('Maščobe', tot.f, settings.goal.f, 'var(--fat)');
+
+  renderWeightCard();
 
   // Obroki
   $('#meals').innerHTML = MEALS.map((m) => {
@@ -151,6 +178,127 @@ function render() {
         <button class="add-mini" data-add="${m.id}">+ Dodaj</button>
       </section>`;
   }).join('');
+}
+
+// ---------- Teža ----------
+/** Vse meritve, urejene po datumu: [{date, kg}] */
+const weightList = () => Object.keys(weights).sort().map((date) => ({ date, kg: weights[date] }));
+const fmtKg = (n) => (Math.round(n * 10) / 10).toLocaleString('sl-SI', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const shortDate = (key) => { const [, m, d] = key.split('-').map(Number); return `${d}. ${m}.`; };
+
+/** SVG graf teže. Os X je časovna (po dnevih), ne po številu meritev. */
+function weightChart(list, { w = 340, h = 180, axes = true, goal = 0 } = {}) {
+  if (list.length < 2) return '';
+  const pad = axes ? { l: 34, r: 8, t: 10, b: 20 } : { l: 3, r: 3, t: 4, b: 4 };
+  const day = (k) => { const [y, m, d] = k.split('-').map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+  const x0 = day(list[0].date), x1 = Math.max(day(list[list.length - 1].date), x0 + 1);
+  const vals = list.map((p) => p.kg).concat(axes && goal ? [goal] : []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1) { lo -= 0.5; hi += 0.5; }
+  const X = (k) => pad.l + ((day(k) - x0) / (x1 - x0)) * (w - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
+  const pts = list.map((p) => `${X(p.date).toFixed(1)},${Y(p.kg).toFixed(1)}`).join(' ');
+  const area = `${X(list[0].date)},${h - pad.b} ${pts} ${X(list[list.length - 1].date)},${h - pad.b}`;
+  let extra = '';
+  if (axes) {
+    for (let i = 0; i <= 3; i++) {
+      const v = lo + ((hi - lo) * i) / 3, y = Y(v);
+      extra += `<line class="grid" x1="${pad.l}" x2="${w - pad.r}" y1="${y}" y2="${y}"/><text x="${pad.l - 6}" y="${y + 4}" text-anchor="end">${fmtKg(v)}</text>`;
+    }
+    extra += `<text x="${pad.l}" y="${h - 4}">${shortDate(list[0].date)}</text><text x="${w - pad.r}" y="${h - 4}" text-anchor="end">${shortDate(list[list.length - 1].date)}</text>`;
+    if (goal) extra += `<line class="goal" x1="${pad.l}" x2="${w - pad.r}" y1="${Y(goal)}" y2="${Y(goal)}"/>`;
+  }
+  const last = list[list.length - 1];
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="${axes ? 'w-chart' : 'w-spark'}" aria-hidden="true">
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22c55e" stop-opacity=".22"/><stop offset="1" stop-color="#22c55e" stop-opacity="0"/></linearGradient></defs>
+    ${extra}
+    <polygon points="${area}" fill="url(#wg)"/>
+    <polyline points="${pts}" fill="none" stroke="#16a34a" stroke-width="${axes ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    ${axes ? `<circle cx="${X(last.date)}" cy="${Y(last.kg)}" r="4" fill="#16a34a"/>` : ''}
+  </svg>`;
+}
+
+function renderWeightCard() {
+  const list = weightList();
+  const card = $('#weightCard');
+  if (!list.length) {
+    card.innerHTML = `<div class="w-main"><div class="w-label">Teža</div><div class="w-num" style="font-size:17px">Vnesi prvo meritev</div></div>
+      <div style="flex:1"></div><div class="w-add">+</div>`;
+    return;
+  }
+  const last = list[list.length - 1];
+  // sprememba v zadnjih 7 dneh (primerja z zadnjo meritvijo pred 7+ dnevi, sicer s prvo)
+  const ref = [...list].reverse().find((p) => p.date <= shiftDay(last.date, -7)) || list[0];
+  const d = last.kg - ref.kg;
+  const diff = list.length > 1
+    ? `<div class="w-diff ${d < 0 ? 'down' : d > 0 ? 'up' : ''}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : ''}${fmtKg(d)} kg od ${shortDate(ref.date)}</div>`
+    : `<div class="w-diff">${shortDate(last.date)}</div>`;
+  card.innerHTML = `<div class="w-main"><div class="w-label">Teža</div>
+      <div class="w-num">${fmtKg(last.kg)} <small>kg</small></div>${diff}</div>
+    ${weightChart(list.slice(-30), { w: 160, h: 56, axes: false }) || '<div style="flex:1"></div>'}
+    <div class="w-add">+</div>`;
+}
+
+function openWeight() {
+  const list = weightList();
+  const last = list[list.length - 1];
+  const dateK = state.date;
+  const goal = Number(settings.goalWeight) || 0;
+  let range = 30;
+
+  openSheet(`
+    <h2>Teža</h2>
+    <div class="row" style="align-items:flex-end">
+      <label class="field" style="margin:0"><span>${dateLabel(dateK)} (kg)</span>
+        <input class="input" id="wIn" type="text" inputmode="decimal" autocomplete="off"
+          value="${(weights[dateK] ?? (last ? last.kg : '')).toString().replace('.', ',')}"></label>
+      <button class="btn" id="wSave" style="margin:0;flex:.6">Shrani</button>
+    </div>
+    ${goal && last ? `<div class="note">Cilj: <b>${fmtKg(goal)} kg</b> · še ${fmtKg(Math.abs(last.kg - goal))} kg ${last.kg > goal ? 'dol' : 'gor'}</div>` : ''}
+    <div id="wChartBox" style="margin-top:14px"></div>
+    <h3>Meritve</h3>
+    <div id="wList"></div>
+    <p class="muted">Ciljno težo nastaviš v Nastavitvah. Za primerljive rezultate se tehtaj vsak dan ob isti uri (npr. zjutraj).</p>
+  `);
+
+  const drawChart = () => {
+    const all = weightList();
+    const from = range ? shiftDay(todayKey(), -range) : '';
+    const sel = all.filter((p) => p.date >= from);
+    $('#wChartBox').innerHTML = all.length < 2
+      ? '<div class="note">Graf se prikaže po dveh meritvah.</div>'
+      : `<div class="seg" id="wRange">${[[30, '30 dni'], [90, '90 dni'], [365, 'Leto'], [0, 'Vse']]
+          .map(([v, l]) => `<button data-r="${v}" class="${v === range ? 'on' : ''}">${l}</button>`).join('')}</div>
+        ${sel.length >= 2 ? weightChart(sel, { goal }) : '<div class="note">V tem obdobju sta manj kot dve meritvi.</div>'}`;
+    const r = $('#wRange');
+    if (r) r.onclick = (e) => { const b = e.target.closest('button'); if (b) { range = Number(b.dataset.r); drawChart(); } };
+    $('#wList').innerHTML = all.length
+      ? [...all].reverse().slice(0, 60).map((p, i, arr) => {
+          const prev = arr[i + 1];
+          const d = prev ? p.kg - prev.kg : 0;
+          return `<div class="list-item">
+            <div class="entry-main"><div class="entry-name">${fmtKg(p.kg)} kg</div><div class="entry-sub">${dateLabel(p.date)}</div></div>
+            ${prev ? `<span class="w-diff ${d < 0 ? 'down' : d > 0 ? 'up' : ''}">${d > 0 ? '+' : ''}${fmtKg(d)}</span>` : ''}
+            <button class="icon-btn" style="width:34px;height:34px;font-size:15px;box-shadow:none;background:#f6f7fb" data-del="${p.date}" aria-label="Izbriši">✕</button>
+          </div>`;
+        }).join('')
+      : '<p class="muted">Še ni meritev.</p>';
+  };
+  drawChart();
+
+  $('#wList').onclick = (e) => {
+    const b = e.target.closest('[data-del]'); if (!b) return;
+    if (!confirm(`Izbrišem meritev ${dateLabel(b.dataset.del)}?`)) return;
+    delete weights[b.dataset.del]; store.set('weights', weights); drawChart(); render();
+  };
+  $('#wSave').onclick = () => {
+    const kg = Number(String($('#wIn').value).replace(',', '.'));
+    if (!(kg >= 20 && kg <= 400)) return toast('Vpiši veljavno težo v kg');
+    weights[dateK] = Math.round(kg * 10) / 10;
+    store.set('weights', weights);
+    render(); drawChart(); toast('Teža shranjena');
+  };
+  setTimeout(() => $('#wIn') && $('#wIn').select(), 300);
 }
 
 // ---------- Spodnji list (sheet) ----------
@@ -651,18 +799,20 @@ async function analyzeLabel(file) {
 
 // ---------- Nastavitve ----------
 function openSettings() {
-  const g = settings.goal;
+  let ratio = settings.ratio;
   openSheet(`
     <h2>Nastavitve</h2>
     <h3>Dnevni cilj</h3>
     <div class="row">
-      <label class="field"><span>kcal</span><input class="input" id="sK" type="number" inputmode="numeric" value="${g.kcal}"></label>
-      <label class="field"><span>Beljakovine g</span><input class="input" id="sP" type="number" inputmode="numeric" value="${g.p}"></label>
+      <label class="field"><span>Kalorije (kcal)</span><input class="input" id="sK" type="number" inputmode="numeric" value="${settings.goal.kcal}"></label>
+      <label class="field"><span>Ciljna teža (kg)</span><input class="input" id="sW" type="text" inputmode="decimal" placeholder="neobvezno" value="${settings.goalWeight ? String(settings.goalWeight).replace('.', ',') : ''}"></label>
     </div>
-    <div class="row">
-      <label class="field"><span>Oglj. hidrati g</span><input class="input" id="sC" type="number" inputmode="numeric" value="${g.c}"></label>
-      <label class="field"><span>Maščobe g</span><input class="input" id="sF" type="number" inputmode="numeric" value="${g.f}"></label>
+    <div class="field"><span>Razmerje makrohranil (beljakovine / OH / maščobe)</span>
+      <div id="ratioBox">${RATIOS.map((r) => `
+        <button class="ratio-opt" data-r="${r.id}"><b>${r.name}</b><span>${r.p} / ${r.c} / ${r.f} %</span></button>`).join('')}</div>
     </div>
+    <div class="ratio-calc" id="ratioCalc"></div>
+    <p class="muted">Grami se izračunajo samodejno iz kalorij in razmerja. Razmerja so splošne razdelitve – za posebne potrebe se posvetuj s strokovnjakom.</p>
 
     <h3>Samodejna razporeditev obrokov</h3>
     <div class="row">
@@ -687,8 +837,21 @@ function openSettings() {
     <p class="muted center" style="margin-top:16px">Kalko · podatki o izdelkih: Open Food Facts (ODbL)</p>
   `);
 
+  const updRatio = () => {
+    const g = goalFromRatio(Number($('#sK').value) || 0, ratio);
+    document.querySelectorAll('#ratioBox .ratio-opt').forEach((b) => b.classList.toggle('on', b.dataset.r === ratio));
+    $('#ratioCalc').innerHTML = `<div><b>${g.p} g</b>beljakovine</div><div><b>${g.c} g</b>oglj. hidrati</div><div><b>${g.f} g</b>maščobe</div>`;
+  };
+  $('#sK').addEventListener('input', updRatio);
+  $('#ratioBox').onclick = (e) => { const b = e.target.closest('.ratio-opt'); if (b) { ratio = b.dataset.r; updRatio(); } };
+  updRatio();
+
   $('#sSave').onclick = () => {
-    settings.goal = { kcal: Number($('#sK').value) || 2000, p: Number($('#sP').value) || 0, c: Number($('#sC').value) || 0, f: Number($('#sF').value) || 0 };
+    const kcal = Number($('#sK').value);
+    if (!(kcal >= 800 && kcal <= 8000)) return toast('Vpiši kalorije med 800 in 8000');
+    settings.ratio = ratio;
+    settings.goal = goalFromRatio(Math.round(kcal), ratio);
+    settings.goalWeight = Number(String($('#sW').value).replace(',', '.')) || 0;
     settings.breakfastEnd = $('#sB').value || DEFAULT_SETTINGS.breakfastEnd;
     settings.lunchEnd = $('#sL').value || DEFAULT_SETTINGS.lunchEnd;
     settings.apiKey = $('#sKey').value.trim();
@@ -696,7 +859,7 @@ function openSettings() {
     render(); closeSheet(); toast('Nastavitve shranjene');
   };
   $('#sExport').onclick = async () => {
-    const blob = new Blob([JSON.stringify({ log, foods: myFoods, recent, settings: { ...settings, apiKey: '' } }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ log, weights, foods: myFoods, recent, settings: { ...settings, apiKey: '' } }, null, 1)], { type: 'application/json' });
     const file = new File([blob], `kalko-${todayKey()}.json`, { type: 'application/json' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'Kalko varnostna kopija' }); } catch { /* preklicano */ }
@@ -712,9 +875,9 @@ async function importBackup(file) {
     const data = JSON.parse(await file.text());
     if (!data.log) throw new Error();
     if (!confirm('Uvoz bo prepisal trenutne podatke. Nadaljujem?')) return;
-    log = data.log; myFoods = data.foods || {}; recent = data.recent || [];
-    if (data.settings) settings = { ...settings, ...data.settings, apiKey: settings.apiKey };
-    store.set('log', log); store.set('foods', myFoods); store.set('recent', recent); store.set('settings', settings);
+    log = data.log; myFoods = data.foods || {}; recent = data.recent || []; weights = data.weights || {};
+    if (data.settings) { settings = { ...settings, ...data.settings, apiKey: settings.apiKey }; settings.goal = goalFromRatio(Number(settings.goal && settings.goal.kcal) || 2200, settings.ratio); }
+    store.set('log', log); store.set('weights', weights); store.set('foods', myFoods); store.set('recent', recent); store.set('settings', settings);
     render(); closeSheet(); toast('Podatki uvoženi');
   } catch { toast('Neveljavna datoteka'); }
 }
@@ -727,6 +890,7 @@ $('#btnScan').onclick = () => openScanner();
 $('#btnSearch').onclick = () => openSearch();
 $('#btnPhoto').onclick = () => { photoMeal = null; $('#photoInput').click(); };
 $('#btnSettings').onclick = openSettings;
+$('#weightCard').onclick = openWeight;
 $('#backdrop').onclick = () => closeSheet();
 
 let photoMeal = null;
