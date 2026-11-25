@@ -186,6 +186,26 @@ const weightList = () => Object.keys(weights).sort().map((date) => ({ date, kg: 
 const fmtKg = (n) => (Math.round(n * 10) / 10).toLocaleString('sl-SI', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const shortDate = (key) => { const [, m, d] = key.split('-').map(Number); return `${d}. ${m}.`; };
 
+/** Povprečje meritev v obdobju (endKey-days, endKey]. Vrne null, če ni meritev. */
+function avgWeight(list, endKey, days) {
+  const from = shiftDay(endKey, -days);
+  const sel = list.filter((p) => p.date > from && p.date <= endKey);
+  return sel.length ? sel.reduce((s, p) => s + p.kg, 0) / sel.length : null;
+}
+/** Drseče 7-dnevno povprečje za vsako meritev (glajenje dnevnih nihanj). */
+const movingAvg = (list) => list.map((p) => ({ date: p.date, kg: avgWeight(list, p.date, 7) }));
+/** Povprečen dnevni vnos kcal v zadnjih `days` dneh (šteje samo dneve z vnosi). */
+function avgKcal(endKey, days) {
+  let sum = 0, n = 0;
+  for (let i = 0; i < days; i++) {
+    const e = log[shiftDay(endKey, -i)];
+    if (e && e.length) { sum += e.reduce((s, x) => s + calc(x.per100, x.grams).kcal, 0); n++; }
+  }
+  return n ? { kcal: sum / n, days: n } : null;
+}
+const signed = (d) => `${d > 0 ? '+' : ''}${fmtKg(d)}`;
+const trendCls = (d) => (d < -0.05 ? 'down' : d > 0.05 ? 'up' : '');
+
 /** SVG graf teže. Os X je časovna (po dnevih), ne po številu meritev. */
 function weightChart(list, { w = 340, h = 180, axes = true, goal = 0 } = {}) {
   if (list.length < 2) return '';
@@ -213,6 +233,7 @@ function weightChart(list, { w = 340, h = 180, axes = true, goal = 0 } = {}) {
     <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22c55e" stop-opacity=".22"/><stop offset="1" stop-color="#22c55e" stop-opacity="0"/></linearGradient></defs>
     ${extra}
     <polygon points="${area}" fill="url(#wg)"/>
+    ${axes && list.length >= 3 ? `<polyline points="${movingAvg(list).map((p) => `${X(p.date).toFixed(1)},${Y(p.kg).toFixed(1)}`).join(' ')}" fill="none" stroke="#0f5132" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".7"/>` : ''}
     <polyline points="${pts}" fill="none" stroke="#16a34a" stroke-width="${axes ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
     ${axes ? `<circle cx="${X(last.date)}" cy="${Y(last.kg)}" r="4" fill="#16a34a"/>` : ''}
   </svg>`;
@@ -227,12 +248,17 @@ function renderWeightCard() {
     return;
   }
   const last = list[list.length - 1];
-  // sprememba v zadnjih 7 dneh (primerja z zadnjo meritvijo pred 7+ dnevi, sicer s prvo)
-  const ref = [...list].reverse().find((p) => p.date <= shiftDay(last.date, -7)) || list[0];
-  const d = last.kg - ref.kg;
-  const diff = list.length > 1
-    ? `<div class="w-diff ${d < 0 ? 'down' : d > 0 ? 'up' : ''}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : ''}${fmtKg(d)} kg od ${shortDate(ref.date)}</div>`
-    : `<div class="w-diff">${shortDate(last.date)}</div>`;
+  // povprečje zadnjih 7 dni proti povprečju 7 dni pred tem (bolj zanesljivo kot posamezne meritve)
+  const now = todayKey();
+  const a7 = avgWeight(list, now, 7);
+  const p7 = avgWeight(list, shiftDay(now, -7), 7);
+  let diff = `<div class="w-diff">${shortDate(last.date)}</div>`;
+  if (a7 != null && p7 != null) {
+    const d = a7 - p7;
+    diff = `<div class="w-diff ${trendCls(d)}">Ø 7 dni ${fmtKg(a7)} · ${signed(d)} kg/teden</div>`;
+  } else if (a7 != null) {
+    diff = `<div class="w-diff">Ø 7 dni ${fmtKg(a7)} kg</div>`;
+  }
   card.innerHTML = `<div class="w-main"><div class="w-label">Teža</div>
       <div class="w-num">${fmtKg(last.kg)} <small>kg</small></div>${diff}</div>
     ${weightChart(list.slice(-30), { w: 160, h: 56, axes: false }) || '<div style="flex:1"></div>'}
@@ -255,13 +281,31 @@ function openWeight() {
       <button class="btn" id="wSave" style="margin:0;flex:.6">Shrani</button>
     </div>
     ${goal && last ? `<div class="note">Cilj: <b>${fmtKg(goal)} kg</b> · še ${fmtKg(Math.abs(last.kg - goal))} kg ${last.kg > goal ? 'dol' : 'gor'}</div>` : ''}
-    <div id="wChartBox" style="margin-top:14px"></div>
+    <div class="ratio-calc" id="wStats" style="margin-top:14px"></div>
+    <div id="wChartBox"></div>
     <h3>Meritve</h3>
     <div id="wList"></div>
-    <p class="muted">Ciljno težo nastaviš v Nastavitvah. Za primerljive rezultate se tehtaj vsak dan ob isti uri (npr. zjutraj).</p>
+    <p class="muted">Črtkana temna črta na grafu je drseče 7-dnevno povprečje – kaže pravi trend brez dnevnih nihanj (voda, sol, prebava). Ciljno težo nastaviš v Nastavitvah. Za primerljive rezultate se tehtaj vsak dan ob isti uri (npr. zjutraj).</p>
   `);
 
+  const drawStats = () => {
+    const all = weightList(), now = todayKey();
+    const a7 = avgWeight(all, now, 7), p7 = avgWeight(all, shiftDay(now, -7), 7), a30 = avgWeight(all, now, 30);
+    const k7 = avgKcal(now, 7);
+    const d = a7 != null && p7 != null ? a7 - p7 : null;
+    const kcalTxt = k7 ? `${r0(k7.kcal)}` : '–';
+    const kcalSub = k7 ? `Ø kcal/dan (${k7.days} ${k7.days === 1 ? 'dan' : k7.days === 2 ? 'dneva' : k7.days < 5 ? 'dnevi' : 'dni'})` : 'Ø kcal/dan';
+    $('#wStats').innerHTML = `
+      <div><b>${a7 != null ? fmtKg(a7) : '–'}</b>Ø zadnjih 7 dni</div>
+      <div><b>${p7 != null ? fmtKg(p7) : '–'}</b>Ø prejšnjih 7 dni</div>
+      <div><b class="w-diff ${d != null ? trendCls(d) : ''}" style="font-size:16px">${d != null ? signed(d) : '–'}</b>kg / teden</div>
+      <div><b>${a30 != null ? fmtKg(a30) : '–'}</b>Ø 30 dni</div>
+      <div><b>${kcalTxt}</b>${kcalSub}</div>
+      <div><b>${r0(settings.goal.kcal)}</b>cilj kcal/dan</div>`;
+  };
+
   const drawChart = () => {
+    drawStats();
     const all = weightList();
     const from = range ? shiftDay(todayKey(), -range) : '';
     const sel = all.filter((p) => p.date >= from);

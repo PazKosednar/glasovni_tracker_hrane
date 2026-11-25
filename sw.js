@@ -1,5 +1,5 @@
 // Preprost service worker: lastne datoteke shrani za offline, API klici gredo vedno na splet.
-const CACHE = 'kalko-v2';
+const CACHE = 'kalko-v3';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png'];
 
 self.addEventListener('install', (e) => {
