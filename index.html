@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kalko</title>
+  <meta name="description" content="Hiter dnevnik kalorij: skeniranje črtne kode, slika hrane z AI prepoznavo.">
+  <meta name="theme-color" content="#f6f7fb">
+  <!-- iPhone: “Dodaj na začetni zaslon” -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Kalko">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <button class="icon-btn" id="prevDay" aria-label="Prejšnji dan">‹</button>
+    <div class="date-wrap">
+      <div class="app-name">Kalko</div>
+      <button class="date" id="dateLabel">Danes</button>
+    </div>
+    <button class="icon-btn" id="nextDay" aria-label="Naslednji dan">›</button>
+  </header>
+
+  <main id="main">
+    <!-- Povzetek dneva -->
+    <section class="card summary">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+          <circle cx="60" cy="60" r="52" class="ring-bg"/>
+          <circle cx="60" cy="60" r="52" class="ring-fg" id="ringFg"/>
+        </svg>
+        <div class="ring-text">
+          <div class="ring-num" id="kcalLeft">0</div>
+          <div class="ring-sub" id="kcalLeftLabel">kcal ostane</div>
+        </div>
+      </div>
+      <div class="summary-side">
+        <div class="stat"><span>Pojedeno</span><b id="kcalEaten">0</b></div>
+        <div class="stat"><span>Cilj</span><b id="kcalGoal">0</b></div>
+        <div class="macros" id="macros"></div>
+      </div>
+    </section>
+
+    <!-- Obroki -->
+    <div id="meals"></div>
+    <div class="bottom-space"></div>
+  </main>
+
+  <!-- Hitri gumbi -->
+  <nav class="actions">
+    <button class="act" id="btnSearch"><span class="act-ic">🔍</span><span>Išči</span></button>
+    <button class="act primary" id="btnScan"><span class="act-ic">▥</span><span>Skeniraj</span></button>
+    <button class="act" id="btnPhoto"><span class="act-ic">📷</span><span>Slika</span></button>
+    <button class="act ghost" id="btnSettings" aria-label="Nastavitve"><span class="act-ic">⚙︎</span></button>
+  </nav>
+
+  <!-- Skriti input za fotografijo (odpre kamero na iPhonu) -->
+  <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+  <input type="file" id="labelInput" accept="image/*" capture="environment" hidden>
+  <input type="file" id="importInput" accept="application/json" hidden>
+
+  <!-- Spodnji list (sheet) – vsebino polni app.js -->
+  <div class="sheet-backdrop" id="backdrop" hidden></div>
+  <section class="sheet" id="sheet" hidden>
+    <div class="sheet-handle"></div>
+    <div id="sheetBody"></div>
+  </section>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
