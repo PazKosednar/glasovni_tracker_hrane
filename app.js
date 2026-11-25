@@ -935,6 +935,7 @@ $('#btnSearch').onclick = () => openSearch();
 $('#btnPhoto').onclick = () => { photoMeal = null; $('#photoInput').click(); };
 $('#btnSettings').onclick = openSettings;
 $('#weightCard').onclick = openWeight;
+$('#btnWeight').onclick = openWeight;
 $('#backdrop').onclick = () => closeSheet();
 
 let photoMeal = null;
